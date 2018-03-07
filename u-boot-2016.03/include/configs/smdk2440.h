@@ -23,6 +23,7 @@
 
 #define CONFIG_SYS_TEXT_BASE    0x30a00000
 
+#define CONFIG_OF_LIBFDT    /* Support Linux DTS */
 
 #define CONFIG_SYS_ARM_CACHE_WRITETHROUGH
 

@@ -1,0 +1,77 @@
+u-boot-2016.03 & linux-4.13.9 for TX2440A
+gcc version 4.4.3
+
+移植DTS到linux-4.13.9发现kernel停在calibrate_delay()处
+发现以DTS方式启动缺少下面的打印：
+clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+问题应该是出在这个地方，由于时间关系先搁置了。
+
+!!!
+在烧写U-BOOT和LINUX内核时数据大小都要为2048的整数倍
+烧写YAFFS数据时数据大小都要为(2048+64)的整数倍
+!!!
+
+编译boot：
+make smdk2440_defconfig
+make
+
+编译kernel:
+make tx2440_defconfig
+make uImage
+
+编译dtb:
+make dtbs
+
+烧写boot：
+
+SMDK2440 # tftp 0x30000000 u-boot.bin
+SMDK2440 # nand erase.part boot
+SMDK2440 # nand write 0x30000000 boot 46000
+
+烧写kernel:
+
+SMDK2440 # tftp 0x30000000 uImage
+SMDK2440 # nand erase.part kernel
+SMDK2440 # nand write 0x30000000 kernel 205000
+
+烧写rootfs:
+
+使用0x30000000会导致boot代码区被覆盖!!!
+
+SMDK2440 # tftp 0x31000000 rootfs.bin
+SMDK2440 # nand erase.part root
+SMDK2440 # nand write.yaffs 0x31000000 root aa1fc0
+
+保存.config命令：
+make savedefconfig
+
+使用dts方式启动：
+tftp 0x30007FC0 uImage
+tftp 0x30001000 s3c2440-smdk2440.dtb
+bootm 0x30007FC0 - 0x30001000
+
+
+linux-4.13.9启动启动报错：
+---[ end Kernel panic - not syncing: Attempted to kill init! exitcode=0x00000004
+出现这个错误的原因是交叉编译器用的是EABI借口，所以内核也要用EABI接口才行
+Embedded application binary interface （EABI）, 即嵌入式应用二进制接口 
+解决办法：重新配置内核支持EABI
+Kernel Features  --->
+　　   [*] Use the ARM EABI to compile the kernel
+　　   [*]   Allow old ABI binaries to run with this kernel (EXPERIMENTAL)
+
+
+linux-4.13.9支持2440 dts版本启动后打印：
+yaffs: dev is 32505859 name is "mtdblock3" ro
+yaffs: passed flags ""
+VFS: Mounted root (yaffs filesystem) readonly on device 31:3.
+Freeing unused kernel memory: 200K
+This architecture does not have kernel memory protection.
+解决方法：在启动参数里面加入rw
+set bootargs "noinitrd root=/dev/mtdblock3 rw init=/linuxrc console=ttySAC0,115200 mem=64M"
+
+
+linux-2.6.32启动后不断打印
+usb 1-1: reset full speed USB device using s3c2410-ohci and address 2
+可能是u-boot初始化UPLL存在问题，相关函数board_early_init_f
+问题尚未解决，暂时不编译USB驱动
